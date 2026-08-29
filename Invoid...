@@ -1,0 +1,15 @@
+package.json
+{
+  "name": "void-backend",
+  "version": "1.0.0",
+  "description": "Hyper-local anonymous network backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "pg": "^8.11.5"
+  }
+}
