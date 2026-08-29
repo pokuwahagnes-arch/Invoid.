@@ -1,0 +1,134 @@
+App.jsimport React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity, SafeAreaView } from 'react-native';
+
+export default function App() {
+  const [voids, setVoids] = useState([]);
+  const [newVoid, setNewVoid] = useState('');
+  const [viceCall, setViceCall] = useState(0);
+  const [activeTab, setActiveTab] = useState('Local');
+
+  useEffect(() => {
+    setVoids([
+      { id: '1', content: 'In the void, nobody knows who you are. Hello neighborhood! 🌌', net_votes: 14, reply_count: 3, distance: '400m' },
+      { id: '2', content: 'Does anyone know if the local coffee shop is open late tonight?', net_votes: -2, reply_count: 0, distance: '1.2km' },
+      { id: '3', content: 'Just watched a wild shooting star right above the west avenue path!', net_votes: 38, reply_count: 9, distance: '2.5km' },
+    ]);
+    setViceCall(120);
+  }, []);
+
+  const handlePost = () => {
+    if (!newVoid.trim()) return;
+    const freshVoid = {
+      id: Date.now().toString(),
+      content: newVoid,
+      net_votes: 0,
+      reply_count: 0,
+      distance: '0m'
+    };
+    setVoids([freshVoid, ...voids]);
+    setNewVoid('');
+    setViceCall(viceCall + 10);
+  };
+
+  const handleVote = (id, type) => {
+    setVoids(voids.map(item => {
+      if (item.id === id) {
+        const change = type === 'up' ? 1 : -1;
+        return { ...item, net_votes: item.net_votes + change };
+      }
+      return item;
+    }));
+    setViceCall(prev => type === 'up' ? prev + 1 : prev - 1);
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>void</Text>
+        <View style={styles.viceCallBadge}>
+          <Text style={styles.viceCallText}>⚡ {viceCall} vice call</Text>
+        </View>
+      </View>
+
+      <View style={styles.tabContainer}>
+        {['Local', 'Top', 'Replies'].map(tab => (
+          <TouchableOpacity 
+            key={tab} 
+            style={[styles.tab, activeTab === tab && styles.activeTab]} 
+            onPress={() => setActiveTab(tab)}
+          >
+            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <FlatList
+        data={voids}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => (
+          <View style={styles.voidCard}>
+            <View style={styles.cardMain}>
+              <Text style={styles.voidText}>{item.content}</Text>
+              <Text style={styles.distanceText}>📍 {item.distance} away</Text>
+            </View>
+            
+            <View style={styles.actionColumn}>
+              <TouchableOpacity onPress={() => handleVote(item.id, 'up')} style={styles.voteButton}>
+                <Text style={styles.voteArrowUp}>▲</Text>
+              </TouchableOpacity>
+              <Text style={[styles.voteScore, item.net_votes < 0 && styles.negativeScore]}>
+                {item.net_votes}
+              </Text>
+              <TouchableOpacity onPress={() => handleVote(item.id, 'down')} style={styles.voteButton}>
+                <Text style={styles.voteArrowDown}>▼</Text>
+              </TouchableOpacity>
+              <Text style={styles.replyCounter}>💬 {item.reply_count}</Text>
+            </View>
+          </View>
+        )}
+      />
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="Share anonymously into the void..."
+          placeholderTextColor="#66768e"
+          value={newVoid}
+          onChangeText={setNewVoid}
+          multiline
+        />
+        <TouchableOpacity style={styles.postButton} onPress={handlePost}>
+          <Text style={styles.postButtonText}>Void</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0A0E17' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#1A2333' },
+  headerTitle: { fontSize: 28, fontWeight: '900', color: '#00F5D4', letterSpacing: 2 },
+  viceCallBadge: { backgroundColor: '#162235', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: '#00F5D4' },
+  viceCallText: { color: '#00F5D4', fontWeight: 'bold', fontSize: 13 },
+  tabContainer: { flexDirection: 'row', paddingHorizontal: 10, marginVertical: 10 },
+  tab: { paddingVertical: 8, paddingHorizontal: 16, marginHorizontal: 5, borderRadius: 15 },
+  activeTab: { backgroundColor: '#162235', borderWidth: 1, borderColor: '#00F5D4' },
+  tabText: { color: '#66768e', fontWeight: '600' },
+  activeTabText: { color: '#00F5D4' },
+  voidCard: { backgroundColor: '#121824', marginHorizontal: 15, marginVertical: 8, borderRadius: 12, padding: 16, flexDirection: 'row', justifyContent: 'space-between', borderLeftWidth: 4, borderLeftColor: '#00F5D4' },
+  cardMain: { flex: 1, justifyContent: 'space-between', paddingRight: 10 },
+  voidText: { color: '#E2E8F0', fontSize: 16, lineHeight: 22 },
+  distanceText: { color: '#66768e', fontSize: 12, marginTop: 10 },
+  actionColumn: { alignItems: 'center', justifyContent: 'center', width: 45 },
+  voteButton: { padding: 4 },
+  voteArrowUp: { color: '#00F5D4', fontSize: 20 },
+  voteArrowDown: { color: '#FF3366', fontSize: 20 },
+  voteScore: { color: '#00F5D4', fontWeight: 'bold', marginVertical: 4, fontSize: 15 },
+  negativeScore: { color: '#FF3366' },
+  replyCounter: { color: '#66768e', fontSize: 12, marginTop: 8 },
+  inputContainer: { flexDirection: 'row', padding: 12, backgroundColor: '#121824', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#1A2333' },
+  input: { flex: 1, backgroundColor: '#0A0E17', color: '#E2E8F0', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25, maxHeight: 80, fontSize: 15, borderWidth: 1, borderColor: '#1A2333' },
+  postButton: { marginLeft: 12, backgroundColor: '#00F5D4', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20 },
+  postButtonText: { color: '#0A0E17', fontWeight: '900', fontSize: 15 }
+});
