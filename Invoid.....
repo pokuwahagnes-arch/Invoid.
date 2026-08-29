@@ -1,0 +1,25 @@
+app.json
+{
+  "expo": {
+    "name": "void",
+    "slug": "void-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0E17",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.anonymous.void",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "void requires location details to compile local network streams anonymously."
+      }
+    },
+    "android": {
+      "package": "com.anonymous.void",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    }
+  }
+}
