@@ -1,0 +1,132 @@
+server.js
+const express = require('express');
+const { Pool } = require('pg');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Cloud Database Connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+// Middleware to ensure anonymous user exists
+async function ensureUser(req, res, next) {
+  const deviceId = req.headers['device-id'];
+  if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
+  
+  await pool.query(
+    'INSERT INTO users (device_id) VALUES ($1) ON CONFLICT (device_id) DO NOTHING',
+    [deviceId]
+  );
+  req.deviceId = deviceId;
+  next();
+}
+
+// 1. Get Local Voids (Within 10km radius)
+app.get('/api/voids', ensureUser, async (req, res) => {
+  const { lat, lng } = req.query;
+  if (!lat || !lng) return res.status(400).json({ error: 'Location required' });
+
+  try {
+    const result = await pool.query(
+      `SELECT id, content, upvotes - downvotes AS net_votes, reply_count, created_at,
+       ST_Distance(location, ST_MakePoint($1, $2)::geography) AS distance
+       FROM voids
+       WHERE parent_id IS NULL AND ST_DWithin(location, ST_MakePoint($1, $2)::geography, 10000)
+       ORDER BY created_at DESC`,
+      [lng, lat]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Post a New Void
+app.post('/api/voids', ensureUser, async (req, res) => {
+  const { content, lat, lng, parentId } = req.body;
+  try {
+    await pool.query('BEGIN');
+    
+    // Insert post
+    const postResult = await pool.query(
+      `INSERT INTO voids (device_id, content, location, parent_id) 
+       VALUES ($1, $2, ST_MakePoint($3, $4)::geography, $5) RETURNING *`,
+      [req.deviceId, content, lng, lat, parentId || null]
+    );
+
+    // If it's a reply, update reply count on parent
+    if (parentId) {
+      await pool.query('UPDATE voids SET reply_count = reply_count + 1 WHERE id = $1', [parentId]);
+    }
+
+    await pool.query('COMMIT');
+    res.status(201).json(postResult.rows);
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Vote on a Void (Updates Post Score and User Vice Call points)
+app.post('/api/voids/:id/vote', ensureUser, async (req, res) => {
+  const voidId = req.params.id;
+  const { direction } = req.body; 
+  
+  try {
+    await pool.query('BEGIN');
+
+    // Check for existing vote
+    const voteCheck = await pool.query(
+      'SELECT vote_type FROM votes WHERE device_id = $1 AND void_id = $2',
+      [req.deviceId, voidId]
+    );
+
+    if (voteCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'Already voted on this void' });
+    }
+
+    // Target post owner to update their Vice Call
+    const ownerCheck = await pool.query('SELECT device_id FROM voids WHERE id = $1', [voidId]);
+    if (ownerCheck.rows.length === 0) return res.status(404).json({ error: 'Void not found' });
+    const postOwner = ownerCheck.rows[0].device_id;
+
+    // Log Vote
+    await pool.query(
+      'INSERT INTO votes (device_id, void_id, vote_type) VALUES ($1, $2, $3)',
+      [req.deviceId, voidId, direction]
+    );
+
+    // Update Post Stats & Author Vice Call score
+    if (direction === 'up') {
+      await pool.query('UPDATE voids SET upvotes = upvotes + 1 WHERE id = $1', [voidId]);
+      await pool.query('UPDATE users SET vice_call = vice_call + 10 WHERE device_id = $1', [postOwner]);
+    } else {
+      await pool.query('UPDATE voids SET downvotes = downvotes + 1 WHERE id = $1', [voidId]);
+      await pool.query('UPDATE users SET vice_call = vice_call - 5 WHERE device_id = $1', [postOwner]);
+    }
+
+    await pool.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Fetch User Profile (Vice Call Counter)
+app.get('/api/profile', ensureUser, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT vice_call FROM users WHERE device_id = $1', [req.deviceId]);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Void engine running on port ${PORT}`));
