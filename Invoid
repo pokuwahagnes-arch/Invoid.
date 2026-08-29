@@ -1,0 +1,36 @@
+schema.sql
+-- Enable PostGIS for hyper-local radius tracking
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- Users table tracking anonymous device IDs and Vice Call scores
+CREATE TABLE users (
+    device_id VARCHAR(255) PRIMARY KEY,
+    vice_call INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Voids (Posts) table
+CREATE TABLE voids (
+    id SERIAL PRIMARY KEY,
+    device_id VARCHAR(255) REFERENCES users(device_id),
+    content TEXT NOT NULL,
+    location GEOGRAPHY(Point, 4326) NOT NULL,
+    upvotes INT DEFAULT 0,
+    downvotes INT DEFAULT 0,
+    reply_count INT DEFAULT 0,
+    parent_id INT REFERENCES voids(id) ON DELETE CASCADE NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Votes table to prevent duplicate voting on the same void
+CREATE TABLE votes (
+    id SERIAL PRIMARY KEY,
+    device_id VARCHAR(255) REFERENCES users(device_id),
+    void_id INT REFERENCES voids(id) ON DELETE CASCADE,
+    vote_type VARCHAR(10) CHECK (vote_type IN ('up', 'down')),
+    UNIQUE(device_id, void_id)
+);
+
+-- Indexes for rapid hyper-local filtering
+CREATE INDEX voids_location_idx ON voids USING GIST (location);
+CREATE INDEX voids_parent_id_idx ON voids (parent_id);
